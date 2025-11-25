@@ -1,8 +1,112 @@
-import React from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native";
-import { ScreenKey } from "../../App";
+import React, { useState } from "react";
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  SafeAreaView, 
+  Alert 
+} from "react-native";
+// import { ScreenKey } from "../../App"; // Assume que tem um tipo ScreenKey no seu App.tsx
 
-export default function Login({ onNavigate }: { onNavigate: (s: ScreenKey) => void }) {
+// Importa o 'axios' (que você instalou) e o 'isAxiosError' (para corrigir o erro 'unknown')
+import axios, { isAxiosError } from "axios"; 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+// ---
+// 1. DEFINIR A URL DA API
+// ---
+// Lembre-se de usar a porta 8080 se rodar pelo IntelliJ, ou 8081 se rodar pelo Jenkins.
+const API_URL = "http://localhost:8080"; 
+
+// O 'onNavigate' vem do seu ficheiro original
+type Props = {
+  onNavigate: (s: string) => void; // A sua 'ScreenKey'
+};
+
+export default function Login({ onNavigate }: Props) {
+  
+  // ---
+  // 2. ESTADOS DO COMPONENTE
+  // ---
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(""); // Para mensagens de erro
+
+  // ---
+  // 3. LÓGICA DE LOGIN (CHAMADA À API)
+  // ---
+  const handleLogin = async () => {
+    if (isLoading) return; // Evita cliques duplos
+    setIsLoading(true);
+    setError(""); // Limpa erros antigos
+
+    // Validar inputs
+    if (!email || !password) {
+      setError("Por favor, preencha o e-mail e a palavra-passe.");
+      setIsLoading(false);
+      return;
+    }
+
+   try {
+      // Chamar o endpoint /api/auth/login
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
+        email: email,
+        password: password,
+      });
+
+      // Sucesso!
+      const { token, userId } = response.data; // Agora recebemos os dois
+
+      console.log("Login realizado! Token:", token, "ID:", userId);
+
+      // SALVAR NO CELULAR
+      await AsyncStorage.setItem('userToken', token);
+      
+      // O AsyncStorage só salva texto (string), então convertemos o ID numérico
+      await AsyncStorage.setItem('userId', String(userId));
+      
+      // Navegar para a tela principal
+      onNavigate("main");
+
+    } catch (err) {
+      // ... (resto do seu código de erro continua igual)
+      // ---
+      // 4. TRATAMENTO DE ERROS (CORRIGIDO PARA O 'err' unknown)
+      // ---
+      let errorMsg = "E-mail ou palavra-passe inválidos.";
+      
+      // 1. Verificamos se é um erro do Axios
+      if (isAxiosError(err)) {
+        if (err.response) {
+          // 2. Erro da API (ex: 401 Não Autorizado, 404, etc.)
+          console.error("Erro no login (dados da API):", err.response.data);
+          errorMsg = "E-mail ou palavra-passe inválidos.";
+        } else if (err.request) {
+          // 3. Erro de Rede (A API não respondeu)
+          console.error("Erro no login (sem resposta da API):", err.request);
+          errorMsg = "Erro de rede. A API está ligada? (Verifique localhost:8080)";
+        } else {
+          // 4. Outro erro ao montar a requisição do Axios
+          console.error("Erro no login (Axios):", err.message);
+          errorMsg = "Ocorreu um erro ao tentar o login.";
+        }
+      } else if (err instanceof Error) {
+        // 5. Erro genérico do JavaScript
+        console.error("Erro no login (Geral):", err.message);
+        errorMsg = "Ocorreu um erro inesperado.";
+      } else {
+        // 6. Erro desconhecido
+        console.error("Erro desconhecido:", err);
+        errorMsg = "Ocorreu um erro desconhecido.";
+      }
+      
+      setError(errorMsg);
+      setIsLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <TouchableOpacity style={styles.back} onPress={() => onNavigate("welcome")}>
@@ -12,11 +116,18 @@ export default function Login({ onNavigate }: { onNavigate: (s: ScreenKey) => vo
       <View style={styles.content}>
         <Text style={styles.title}>Bem-vindo de volta!</Text>
 
+        {/* Exibir mensagem de erro */}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
         <TextInput
           placeholder="E-mail"
           style={styles.input}
           keyboardType="email-address"
           placeholderTextColor="#6b7280"
+          value={email} // Conecta o input ao estado
+          onChangeText={setEmail} // Conecta o input ao estado
+          autoCapitalize="none"
+          editable={!isLoading}
         />
 
         <TextInput
@@ -24,20 +135,32 @@ export default function Login({ onNavigate }: { onNavigate: (s: ScreenKey) => vo
           style={styles.input}
           secureTextEntry
           placeholderTextColor="#6b7280"
+          value={password} // Conecta o input ao estado
+          onChangeText={setPassword} // Conecta o input ao estado
+          editable={!isLoading}
         />
 
         <TouchableOpacity style={styles.forgot}>
           <Text style={styles.forgotText}>Esqueceu-se da palavra-passe?</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.loginBtn} onPress={() => onNavigate("main")}>
-          <Text style={styles.loginText}>Entrar</Text>
+        <TouchableOpacity 
+          style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]} 
+          onPress={handleLogin} // Chama a nossa função de API
+          disabled={isLoading} // Desativa o botão durante o loading
+        >
+          <Text style={styles.loginText}>
+            {isLoading ? "A entrar..." : "Entrar"}
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
+// ---
+// 5. ESTILOS (Incluindo os novos estilos de erro e botão desativado)
+// ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -91,9 +214,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 16, // mt-4
   },
+  loginBtnDisabled: {
+    backgroundColor: "#a5b4fc", // bg-indigo-300
+  },
   loginText: {
     color: "#fff",
     fontWeight: "700", // font-bold
     fontSize: 18, // text-lg
   },
+  // Novo estilo para o texto de erro
+  errorText: {
+    color: "#ef4444", // text-red-500
+    textAlign: "center",
+    marginBottom: 16, // mb-4
+    fontSize: 14,
+    fontWeight: "600",
+  }
 });
