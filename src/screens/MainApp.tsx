@@ -12,7 +12,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Modal // <--- Importante para a edição
+  Modal 
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
@@ -107,7 +107,7 @@ export default function MainApp({ onNavigate }: { onNavigate: (s: ScreenKey) => 
       const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((distance % (1000 * 60)) / 1000);
       
-      // Formata para ficar bonito (ex: 09:05:02)
+     
       const h = hours < 10 ? `0${hours}` : hours;
       const m = minutes < 10 ? `0${minutes}` : minutes;
       const s = seconds < 10 ? `0${seconds}` : seconds;
@@ -138,7 +138,7 @@ export default function MainApp({ onNavigate }: { onNavigate: (s: ScreenKey) => 
     try {
       const config = { headers: { Authorization: `Bearer ${userToken}` } };
       const res = await axios.get(`${API_URL}/api/messages/match/${matchData.id}`, config);
-      // Só atualiza se tiver mudado algo para evitar render desnecessário (opcional, mas bom)
+      // Só atualiza se tiver mudado algo para evitar render desnecessário 
       if (res.data.length !== messages.length) {
         setMessages(res.data);
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
@@ -175,12 +175,12 @@ export default function MainApp({ onNavigate }: { onNavigate: (s: ScreenKey) => 
     try {
       const config = { headers: { Authorization: `Bearer ${userToken}` } };
       
-      // O Backend exige Data de Nascimento, então reenviamos a original
+      // O Backend exige Data de Nascimento
       await axios.put(`${API_URL}/api/profiles/user/${userId}`, {
         name: editName,
         bio: editBio,
         lastLocation: editLocation,
-        birthDate: myProfile.birthDate // Mantém a data original
+        birthDate: myProfile.birthDate 
       }, config);
 
       Alert.alert("Sucesso", "Perfil atualizado!");
@@ -289,7 +289,6 @@ export default function MainApp({ onNavigate }: { onNavigate: (s: ScreenKey) => 
                 </Text>
                 
                 <View style={styles.profileButtonRow}>
-                  {/* BOTÃO DE EDITAR AGORA FUNCIONA */}
                   <TouchableOpacity style={styles.editBtn} onPress={openEditModal}>
                     <Text style={styles.editBtnText}>✏️ Editar Perfil</Text>
                   </TouchableOpacity>
@@ -385,7 +384,6 @@ const styles = StyleSheet.create({
   bottomNav: { height: 60, flexDirection: "row", justifyContent: "space-around", alignItems: "center", backgroundColor: "#fff", borderTopWidth: 1, borderColor: "#e5e7eb" },
   navBtn: { padding: 10 },
   navIcon: { fontSize: 24 },
-  // Modal Styles
   modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { width: '90%', backgroundColor: '#fff', borderRadius: 16, padding: 24, elevation: 5 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16, textAlign: 'center' },
