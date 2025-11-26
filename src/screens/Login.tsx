@@ -8,18 +8,18 @@ import {
   SafeAreaView, 
   Alert 
 } from "react-native";
-// import { ScreenKey } from "../../App"; // Assume que tem um tipo ScreenKey no seu App.tsx
 
-// Importa o 'axios' (que você instalou) e o 'isAxiosError' (para corrigir o erro 'unknown')
+
+// Importa o 'axios'  e o 'isAxiosError' (para corrigir o erro 'unknown')
 import axios, { isAxiosError } from "axios"; 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 // ---
 // 1. DEFINIR A URL DA API
 // ---
-// Lembre-se de usar a porta 8080 se rodar pelo IntelliJ, ou 8081 se rodar pelo Jenkins.
+// Lembre-se de usar a porta 8080 se rodar pelo IntelliJ
 const API_URL = "http://localhost:8080"; 
 
-// O 'onNavigate' vem do seu ficheiro original
+// O 'onNavigate' vem ficheiro original
 type Props = {
   onNavigate: (s: string) => void; // A sua 'ScreenKey'
 };
@@ -56,7 +56,7 @@ export default function Login({ onNavigate }: Props) {
         password: password,
       });
 
-      // Sucesso!
+  
       const { token, userId } = response.data; // Agora recebemos os dois
 
       console.log("Login realizado! Token:", token, "ID:", userId);
@@ -64,15 +64,13 @@ export default function Login({ onNavigate }: Props) {
       // SALVAR NO CELULAR
       await AsyncStorage.setItem('userToken', token);
       
-      // O AsyncStorage só salva texto (string), então convertemos o ID numérico
+      // convertemos o ID numérico
       await AsyncStorage.setItem('userId', String(userId));
       
       // Navegar para a tela principal
       onNavigate("main");
 
     } catch (err) {
-      // ... (resto do seu código de erro continua igual)
-      // ---
       // 4. TRATAMENTO DE ERROS (CORRIGIDO PARA O 'err' unknown)
       // ---
       let errorMsg = "E-mail ou palavra-passe inválidos.";
@@ -146,7 +144,7 @@ export default function Login({ onNavigate }: Props) {
 
         <TouchableOpacity 
           style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]} 
-          onPress={handleLogin} // Chama a nossa função de API
+          onPress={handleLogin} // Chama a função de API
           disabled={isLoading} // Desativa o botão durante o loading
         >
           <Text style={styles.loginText}>
@@ -159,7 +157,7 @@ export default function Login({ onNavigate }: Props) {
 }
 
 // ---
-// 5. ESTILOS (Incluindo os novos estilos de erro e botão desativado)
+// 5. ESTILOS 
 // ---
 const styles = StyleSheet.create({
   container: {
@@ -222,7 +220,6 @@ const styles = StyleSheet.create({
     fontWeight: "700", // font-bold
     fontSize: 18, // text-lg
   },
-  // Novo estilo para o texto de erro
   errorText: {
     color: "#ef4444", // text-red-500
     textAlign: "center",
