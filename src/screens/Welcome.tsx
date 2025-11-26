@@ -1,8 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { ScreenKey } from "../../App";
-// NOTA: Para o gradiente funcionar, você precisa do 'expo-linear-gradient' ou similar.
-// A sintaxe "as any" é um paliativo.
 import { LinearGradient } from "expo-linear-gradient"; // Exemplo de import
 
 export default function Welcome({ onNavigate }: { onNavigate: (s: ScreenKey) => void }) {
@@ -12,7 +10,7 @@ export default function Welcome({ onNavigate }: { onNavigate: (s: ScreenKey) => 
       style={styles.container}
     >
       <View style={styles.top}>
-        {/* O ícone de relógio do HTML */}
+  
         <Text style={styles.icon}>⏰</Text>
         <Text style={styles.logo}>Aponte</Text>
         <Text style={styles.subtitle}>Um novo encontro, todos os dias.</Text>
