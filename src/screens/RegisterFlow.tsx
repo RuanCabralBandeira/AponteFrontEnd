@@ -60,7 +60,7 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
       console.log("Usuário criado. ID:", userId);
 
       // --- NOVO PASSO: LOGIN AUTOMÁTICO ---
-      // Precisamos do Token para criar o perfil, senão dá erro 403
+      //Token para criar o perfil
       console.log("Autenticando para criar perfil...");
       const resLogin = await axios.post(`${API_URL}/api/auth/login`, {
         email: email,
@@ -97,7 +97,7 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
             url: photoUrl,
             orderIndex: 1
           },
-          config // <--- AQUI TAMBÉM
+          config 
         );
       }
 
