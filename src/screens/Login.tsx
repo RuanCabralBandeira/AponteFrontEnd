@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_URL } from"./config";
 import { 
   View, 
   Text, 
@@ -8,20 +9,13 @@ import {
   SafeAreaView, 
   Alert 
 } from "react-native";
-
-
-// Importa o 'axios'  e o 'isAxiosError' (para corrigir o erro 'unknown')
 import axios, { isAxiosError } from "axios"; 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-// ---
-// 1. DEFINIR A URL DA API
-// ---
-// Lembre-se de usar a porta 8080 se rodar pelo IntelliJ
-const API_URL = "http://localhost:8080"; 
 
-// O 'onNavigate' vem ficheiro original
+
+
 type Props = {
-  onNavigate: (s: string) => void; // A sua 'ScreenKey'
+  onNavigate: (s: string) => void; 
 };
 
 export default function Login({ onNavigate }: Props) {
@@ -137,10 +131,6 @@ export default function Login({ onNavigate }: Props) {
           onChangeText={setPassword} // Conecta o input ao estado
           editable={!isLoading}
         />
-
-        <TouchableOpacity style={styles.forgot}>
-          <Text style={styles.forgotText}>Esqueceu-se da palavra-passe?</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity 
           style={[styles.loginBtn, isLoading && styles.loginBtnDisabled]} 

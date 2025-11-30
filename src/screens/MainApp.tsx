@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { API_URL } from"./config";
 import { 
   View, 
   Text, 
@@ -19,7 +20,6 @@ import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
 import { ScreenKey } from "../../App";
 
-const API_URL = "http://localhost:8080"; 
 
 type Tab = "match" | "chat" | "profile";
 
