@@ -1,1 +1,1 @@
-export const API_URL = "http://academico3.rj.senac.br:8425";
+export const API_URL = "http://academico3.rj.senac.br/aponte";
