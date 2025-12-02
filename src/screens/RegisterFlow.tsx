@@ -127,7 +127,7 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
 
       // Sucesso!
       if (Platform.OS === 'web') {
-        alert("Conta criada com sucesso!");
+        alert("Conta criada com sucessos!");
       } 
       onNavigate("login");
 
