@@ -10,7 +10,22 @@
       "web"
     ],
     "android": {
-      "package": "com.aponte.app"
-    }
+      "package": "com.aponte.app",
+      "usesCleartextTraffic": true,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O app precisa acessar suas fotos.",
+          "cameraPermission": "O app precisa acessar a câmera."
+        }
+      ]
+    ]
   }
 }

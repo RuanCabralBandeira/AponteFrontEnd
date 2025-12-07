@@ -1,46 +1,53 @@
 import React, { useState } from "react";
-import { API_URL } from"./config";
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  Image,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
   SafeAreaView,
   ActivityIndicator,
-  Platform // Para saber se é Web ou Celular
+  Platform, // Essencial para a lógica híbrida
+  Alert
 } from "react-native";
+import * as ImagePicker from 'expo-image-picker';
 import axios from "axios";
+import { API_URL } from "./config";
 import { ScreenKey } from "../../App";
 
+interface RegisterFlowProps {
+  onNavigate: (screen: ScreenKey) => void;
+}
 
-
-export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey) => void }) {
+export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
   const [step, setStep] = useState(1);
-  const total = 5;
+  const total = 4; // ALTERADO DE 5 PARA 4
   const [loading, setLoading] = useState(false);
-  
+
   // ESTADO PARA MENSAGEM DE ERRO
   const [errorMessage, setErrorMessage] = useState("");
 
-  // DADOS
+  // DADOS DO FORMULÁRIO
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [bio, setBio] = useState("");
-  const [photoUrl, setPhotoUrl] = useState("");
+  const [imageUri, setImageUri] = useState<string | null>(null);
 
-  // LIMPAR ERRO AO DIGITAR
   const clearError = () => setErrorMessage("");
 
+  // VALIDAÇÃO DE DATA
   const isValidDate = (dateString: string) => {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     if (!regex.test(dateString)) return false;
     const date = new Date(dateString);
     const timestamp = date.getTime();
     if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) return false;
+
+    // Verifica coerência (evita 30 de fevereiro, etc)
     const [year, month, day] = dateString.split('-').map(Number);
     if (date.getUTCFullYear() !== year || (date.getUTCMonth() + 1) !== month || date.getUTCDate() !== day) {
       return false;
@@ -48,11 +55,10 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
     return true;
   };
 
-  // --- LÓGICA DE AVANÇAR (CATRACA) ---
+  // --- LÓGICA DE NAVEGAÇÃO (STEPS) ---
   function nextStep() {
-    setErrorMessage(""); // Limpa erros anteriores
+    setErrorMessage("");
 
-    // VALIDAÇÃO PASSO 1
     if (step === 1) {
       if (!email.includes("@")) {
         setErrorMessage("Por favor, insira um e-mail válido.");
@@ -64,7 +70,6 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
       }
     }
 
-    // VALIDAÇÃO PASSO 2
     if (step === 2) {
       if (!name.trim()) {
         setErrorMessage("O campo nome é obrigatório.");
@@ -76,7 +81,6 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
       }
     }
 
-    // VALIDAÇÃO PASSO 4
     if (step === 4) {
       if (!bio.trim()) {
         setErrorMessage("Escreva algo na sua biografia.");
@@ -84,7 +88,6 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
       }
     }
 
-    // Se passou, avança
     if (step < total) {
       setStep(step + 1);
     } else {
@@ -93,48 +96,121 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
   }
 
   function prevStep() {
-    setErrorMessage(""); // Limpa erro ao voltar
+    setErrorMessage("");
     if (step > 1) setStep(step - 1);
     else onNavigate("welcome");
   }
 
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8, // Otimizado para upload mais rápido no celular
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+      clearError();
+    }
+  };
+
+  // --- CADASTRO COMPLETO (WEB E MOBILE) ---
   const handleFinishRegistration = async () => {
-    if(loading) return;
+    if (loading) return;
     setLoading(true);
     setErrorMessage("");
 
     try {
-      console.log("Criando usuário...");
+      // 1. CRIAR USUÁRIO
+      console.log("1. Criando usuário...");
       const resUser = await axios.post(`${API_URL}/api/auth/register`, { email, password });
       const userId = resUser.data.id;
 
-      console.log("Autenticando...");
+      // 2. LOGIN (Para pegar o Token JWT)
+      console.log("2. Autenticando...");
       const resLogin = await axios.post(`${API_URL}/api/auth/login`, { email, password });
       const token = resLogin.data.token;
-      const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      console.log("Criando perfil...");
+      const authConfig = { headers: { Authorization: `Bearer ${token}` } };
+
+      // 3. CRIAR PERFIL
+      console.log("3. Criando perfil...");
       const resProfile = await axios.put(`${API_URL}/api/profiles/user/${userId}`, {
-        name, birthDate, bio, lastLocation: "Brasil"
-      }, config);
-      
-      if (photoUrl) {
-        console.log("Adicionando foto...");
-        await axios.post(`${API_URL}/api/photos/profile/${resProfile.data.id}`, {
-          url: photoUrl, orderIndex: 1
-        }, config);
+        name,
+        birthDate,
+        bio,
+        lastLocation: "Brasil"
+      }, authConfig);
+
+      const profileId = resProfile.data.id;
+
+      // 4. UPLOAD DA FOTO (Lógica Híbrida)
+      if (imageUri) {
+        console.log("4. Enviando foto...");
+
+        const formData = new FormData();
+        formData.append('profileId', String(profileId));
+
+        // --- DIVISOR DE ÁGUAS: WEB vs MOBILE ---
+        if (Platform.OS === 'web') {
+          // No navegador, precisamos converter a URL em um BLOB (arquivo binário real)
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          formData.append('file', blob, 'profile.jpg');
+        } else {
+          // No Celular (APK), o React Native exige um objeto JSON específico
+          const filename = imageUri.split('/').pop();
+          const match = /\.(\w+)$/.exec(filename || '');
+          const type = match ? `image/${match[1]}` : `image/jpeg`;
+
+          // @ts-ignore
+          formData.append('file', {
+            uri: imageUri,
+            name: filename || 'profile.jpg',
+            type: type,
+          });
+        }
+
+        // ENVIO DO FORM DATA
+        await axios.post(`${API_URL}/photos/upload`, formData, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+            // Deixe o Axios gerar o 'multipart/form-data; boundary=...' automaticamente
+          },
+          transformRequest: (data) => {
+            return data; // Impede conversão para JSON
+          }
+        });
       }
 
-      // Sucesso!
+      console.log("Sucesso total!");
+
       if (Platform.OS === 'web') {
-        alert("Conta criada com sucessos!");
-      } 
+        alert("Conta criada com sucesso!");
+      } else {
+        Alert.alert("Sucesso", "Conta criada com sucesso!");
+      }
+
       onNavigate("login");
 
     } catch (error: any) {
-      console.error("Erro:", error.response?.data || error.message);
-      // Mostra o erro do backend na tela (ex: Email já em uso)
-      setErrorMessage("Erro ao criar conta. Verifique os dados ou tente outro e-mail.");
+      console.error("Erro completo:", error);
+      let msg = "Erro desconhecido.";
+
+      if (error.response) {
+        if (error.response.status === 403) {
+          msg = "Erro de permissão (403). Falha na autenticação do upload.";
+        } else if (error.response.data && error.response.data.message) {
+          msg = error.response.data.message;
+        } else {
+          msg = JSON.stringify(error.response.data);
+        }
+      } else if (error.message) {
+        msg = error.message;
+      }
+      setErrorMessage(`Falha no cadastro: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -152,7 +228,7 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        
+
         {step === 1 && (
           <View>
             <Text style={styles.title}>Seus dados de acesso</Text>
@@ -162,6 +238,7 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
               value={email}
               onChangeText={(t) => { setEmail(t); clearError(); }}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
             <TextInput
               placeholder="Senha (mín 6 caracteres)"
@@ -196,14 +273,24 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
         {step === 3 && (
           <View>
             <Text style={styles.title}>Sua foto de perfil</Text>
-            <Text style={styles.subtitle}>Cole o link de uma foto sua.</Text>
-            <TextInput
-              placeholder="https://..."
-              style={styles.input}
-              value={photoUrl}
-              onChangeText={setPhotoUrl}
-              autoCapitalize="none"
-            />
+            <Text style={styles.subtitle}>Escolha uma foto da sua galeria.</Text>
+
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              {imageUri ? (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={{ width: 120, height: 120, borderRadius: 60, marginBottom: 10 }}
+                />
+              ) : (
+                <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#e5e7eb', marginBottom: 10 }} />
+              )}
+
+              <TouchableOpacity onPress={pickImage} style={styles.uploadBtn}>
+                <Text style={styles.uploadBtnText}>
+                  {imageUri ? "Trocar Foto" : "Selecionar Foto"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -212,7 +299,7 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
             <Text style={styles.title}>Fale um pouco sobre si</Text>
             <TextInput
               placeholder="O que você gosta de fazer?"
-              style={[styles.input, { height: 160, textAlignVertical: "top" }]} 
+              style={[styles.input, { height: 160, textAlignVertical: "top" }]}
               multiline
               value={bio}
               onChangeText={(t) => { setBio(t); clearError(); }}
@@ -220,22 +307,6 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
           </View>
         )}
 
-        {step === 5 && (
-          <View>
-            <Text style={styles.title}>Tudo pronto!</Text>
-            <Text style={styles.subtitle}>Clique abaixo para finalizar.</Text>
-            <View style={styles.tagsRow}>
-              <TouchableOpacity style={[styles.tag, {backgroundColor: '#4f46e5'}]}>
-                <Text style={[styles.tagText, {color: '#fff'}]}>Fotografia</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.tag}>
-                <Text style={styles.tagText}>Viagens</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* --- AQUI ESTÁ A MÁGICA: MENSAGEM DE ERRO NA TELA --- */}
         {errorMessage ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
@@ -245,12 +316,12 @@ export default function RegisterFlow({ onNavigate }: { onNavigate: (s: ScreenKey
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
-            style={[styles.nextBtn, loading && {backgroundColor: '#a5b4fc'}]} 
-            onPress={nextStep}
-            disabled={loading}
+        <TouchableOpacity
+          style={[styles.nextBtn, loading && { backgroundColor: '#a5b4fc' }]}
+          onPress={nextStep}
+          disabled={loading}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : 
+          {loading ? <ActivityIndicator color="#fff" /> :
             <Text style={styles.nextText}>{step < total ? "Continuar" : "Finalizar Cadastro"}</Text>
           }
         </TouchableOpacity>
@@ -271,23 +342,20 @@ const styles = StyleSheet.create({
   input: { backgroundColor: "#f3f4f6", padding: 16, borderRadius: 8, marginBottom: 16, fontSize: 16, color: "#111827" },
   label: { color: "#6b7280", marginBottom: 8, fontSize: 14 },
   subtitle: { color: "#6b7280", marginBottom: 24, fontSize: 16 },
-  tagsRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  tag: { backgroundColor: "#e5e7eb", paddingVertical: 8, paddingHorizontal: 16, borderRadius: 999 },
-  tagText: { color: "#374151", fontWeight: "600" },
   footer: { padding: 32, position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#fff" },
   nextBtn: { backgroundColor: "#4f46e5", paddingVertical: 16, borderRadius: 12, alignItems: "center" },
   nextText: { color: "#fff", fontWeight: "700", fontSize: 18 },
-  
-  // ESTILOS DE ERRO
+  uploadBtn: { backgroundColor: '#e5e7eb', padding: 12, borderRadius: 8 },
+  uploadBtnText: { color: '#374151', fontWeight: '600' },
   errorContainer: {
-    backgroundColor: '#fee2e2', // Fundo vermelho claro
+    backgroundColor: '#fee2e2',
     padding: 12,
     borderRadius: 8,
     marginTop: 10,
     marginBottom: 20
   },
   errorText: {
-    color: '#ef4444', // Texto vermelho
+    color: '#ef4444',
     fontWeight: '600',
     textAlign: 'center'
   }
