@@ -1,16 +1,7 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  Image,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  SafeAreaView,
-  ActivityIndicator,
-  Platform, // Essencial para a lógica híbrida
-  Alert
+  View, Text, Image, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, SafeAreaView, ActivityIndicator, Platform, Alert
 } from "react-native";
 import * as ImagePicker from 'expo-image-picker';
 import axios from "axios";
@@ -23,13 +14,10 @@ interface RegisterFlowProps {
 
 export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
   const [step, setStep] = useState(1);
-  const total = 4; // ALTERADO DE 5 PARA 4
+  const total = 4;
   const [loading, setLoading] = useState(false);
-
-  // ESTADO PARA MENSAGEM DE ERRO
   const [errorMessage, setErrorMessage] = useState("");
 
-  // DADOS DO FORMULÁRIO
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -39,60 +27,30 @@ export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
 
   const clearError = () => setErrorMessage("");
 
-  // VALIDAÇÃO DE DATA
   const isValidDate = (dateString: string) => {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     if (!regex.test(dateString)) return false;
     const date = new Date(dateString);
-    const timestamp = date.getTime();
-    if (typeof timestamp !== 'number' || Number.isNaN(timestamp)) return false;
-
-    // Verifica coerência (evita 30 de fevereiro, etc)
+    if (isNaN(date.getTime())) return false;
     const [year, month, day] = dateString.split('-').map(Number);
-    if (date.getUTCFullYear() !== year || (date.getUTCMonth() + 1) !== month || date.getUTCDate() !== day) {
-      return false;
-    }
+    if (date.getUTCFullYear() !== year || (date.getUTCMonth() + 1) !== month || date.getUTCDate() !== day) return false;
     return true;
   };
 
-  // --- LÓGICA DE NAVEGAÇÃO (STEPS) ---
   function nextStep() {
     setErrorMessage("");
-
     if (step === 1) {
-      if (!email.includes("@")) {
-        setErrorMessage("Por favor, insira um e-mail válido.");
-        return;
-      }
-      if (password.length < 6) {
-        setErrorMessage("A senha deve ter no mínimo 6 caracteres.");
-        return;
-      }
+      if (!email.includes("@")) { setErrorMessage("E-mail inválido."); return; }
+      if (password.length < 6) { setErrorMessage("Senha min 6 caracteres."); return; }
     }
-
     if (step === 2) {
-      if (!name.trim()) {
-        setErrorMessage("O campo nome é obrigatório.");
-        return;
-      }
-      if (!isValidDate(birthDate)) {
-        setErrorMessage("Data inválida. Use o formato AAAA-MM-DD (Ex: 1999-12-31).");
-        return;
-      }
+      if (!name.trim()) { setErrorMessage("Nome obrigatório."); return; }
+      if (!isValidDate(birthDate)) { setErrorMessage("Data inválida (AAAA-MM-DD)."); return; }
     }
+    if (step === 4 && !bio.trim()) { setErrorMessage("Escreva uma biografia."); return; }
 
-    if (step === 4) {
-      if (!bio.trim()) {
-        setErrorMessage("Escreva algo na sua biografia.");
-        return;
-      }
-    }
-
-    if (step < total) {
-      setStep(step + 1);
-    } else {
-      handleFinishRegistration();
-    }
+    if (step < total) setStep(step + 1);
+    else handleFinishRegistration();
   }
 
   function prevStep() {
@@ -106,16 +64,15 @@ export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8, // Otimizado para upload mais rápido no celular
+      quality: 0.8,
     });
-
     if (!result.canceled) {
       setImageUri(result.assets[0].uri);
       clearError();
     }
   };
 
-  // --- CADASTRO COMPLETO (WEB E MOBILE) ---
+  // --- AQUI ESTÁ A CORREÇÃO PRINCIPAL ---
   const handleFinishRegistration = async () => {
     if (loading) return;
     setLoading(true);
@@ -123,43 +80,32 @@ export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
 
     try {
       // 1. CRIAR USUÁRIO
-      console.log("1. Criando usuário...");
       const resUser = await axios.post(`${API_URL}/api/auth/register`, { email, password });
       const userId = resUser.data.id;
 
-      // 2. LOGIN (Para pegar o Token JWT)
-      console.log("2. Autenticando...");
+      // 2. LOGIN
       const resLogin = await axios.post(`${API_URL}/api/auth/login`, { email, password });
       const token = resLogin.data.token;
 
-      const authConfig = { headers: { Authorization: `Bearer ${token}` } };
-
       // 3. CRIAR PERFIL
-      console.log("3. Criando perfil...");
       const resProfile = await axios.put(`${API_URL}/api/profiles/user/${userId}`, {
-        name,
-        birthDate,
-        bio,
-        lastLocation: "Brasil"
-      }, authConfig);
+        name, birthDate, bio, lastLocation: "Brasil"
+      }, { headers: { Authorization: `Bearer ${token}` } });
 
       const profileId = resProfile.data.id;
 
-      // 4. UPLOAD DA FOTO (Lógica Híbrida)
+      // 4. UPLOAD DA FOTO (USANDO FETCH PARA ANDROID)
       if (imageUri) {
-        console.log("4. Enviando foto...");
-
+        console.log("Iniciando upload via FETCH...");
         const formData = new FormData();
         formData.append('profileId', String(profileId));
 
-        // --- DIVISOR DE ÁGUAS: WEB vs MOBILE ---
         if (Platform.OS === 'web') {
-          // No navegador, precisamos converter a URL em um BLOB (arquivo binário real)
           const response = await fetch(imageUri);
           const blob = await response.blob();
           formData.append('file', blob, 'profile.jpg');
         } else {
-          // No Celular (APK), o React Native exige um objeto JSON específico
+          // Lógica Android
           const filename = imageUri.split('/').pop();
           const match = /\.(\w+)$/.exec(filename || '');
           const type = match ? `image/${match[1]}` : `image/jpeg`;
@@ -172,45 +118,34 @@ export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
           });
         }
 
-        // ENVIO DO FORM DATA
-        await axios.post(`${API_URL}/photos/upload`, formData, {
+        // --- TROCA DE AXIOS POR FETCH ---
+        const uploadResponse = await fetch(`${API_URL}/photos/upload`, {
+          method: 'POST',
+          body: formData,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Accept': 'application/json',
-            // Deixe o Axios gerar o 'multipart/form-data; boundary=...' automaticamente
+            // IMPORTANTE: NÃO coloque 'Content-Type': 'multipart/form-data' aqui!
+            // O fetch adiciona automaticamente com o boundary correto.
           },
-          transformRequest: (data) => {
-            return data; // Impede conversão para JSON
-          }
         });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          console.log("Erro no upload:", errorText);
+          throw new Error("Falha ao enviar a foto (Servidor rejeitou).");
+        }
       }
 
-      console.log("Sucesso total!");
-
-      if (Platform.OS === 'web') {
-        alert("Conta criada com sucesso!");
-      } else {
-        Alert.alert("Sucesso", "Conta criada com sucesso!");
-      }
-
+      Alert.alert("Sucesso", "Conta criada!");
       onNavigate("login");
 
     } catch (error: any) {
-      console.error("Erro completo:", error);
+      console.error(error);
       let msg = "Erro desconhecido.";
-
-      if (error.response) {
-        if (error.response.status === 403) {
-          msg = "Erro de permissão (403). Falha na autenticação do upload.";
-        } else if (error.response.data && error.response.data.message) {
-          msg = error.response.data.message;
-        } else {
-          msg = JSON.stringify(error.response.data);
-        }
-      } else if (error.message) {
-        msg = error.message;
-      }
-      setErrorMessage(`Falha no cadastro: ${msg}`);
+      if (error.response?.data?.message) msg = error.response.data.message;
+      else if (error.message) msg = error.message;
+      setErrorMessage(`Erro: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -219,111 +154,45 @@ export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.back} onPress={prevStep}>
-          <Text style={styles.backText}>‹</Text>
-        </TouchableOpacity>
-        <View style={styles.progress}>
-          <View style={[styles.progressBar, { width: `${(step / total) * 100}%` }]} />
-        </View>
+        <TouchableOpacity style={styles.back} onPress={prevStep}><Text style={styles.backText}>‹</Text></TouchableOpacity>
+        <View style={styles.progress}><View style={[styles.progressBar, { width: `${(step / total) * 100}%` }]} /></View>
       </View>
-
       <ScrollView contentContainerStyle={styles.content}>
-
         {step === 1 && (
           <View>
-            <Text style={styles.title}>Seus dados de acesso</Text>
-            <TextInput
-              placeholder="E-mail"
-              style={styles.input}
-              value={email}
-              onChangeText={(t) => { setEmail(t); clearError(); }}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-            <TextInput
-              placeholder="Senha (mín 6 caracteres)"
-              style={styles.input}
-              secureTextEntry
-              value={password}
-              onChangeText={(t) => { setPassword(t); clearError(); }}
-            />
+            <Text style={styles.title}>Acesso</Text>
+            <TextInput placeholder="E-mail" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+            <TextInput placeholder="Senha" style={styles.input} secureTextEntry value={password} onChangeText={setPassword} />
           </View>
         )}
-
         {step === 2 && (
           <View>
-            <Text style={styles.title}>Como podemos chamá-lo?</Text>
-            <TextInput
-              placeholder="Nome"
-              style={styles.input}
-              value={name}
-              onChangeText={(t) => { setName(t); clearError(); }}
-            />
-            <Text style={styles.label}>Data de nascimento (AAAA-MM-DD)</Text>
-            <TextInput
-              placeholder="Ex: 2000-12-25"
-              style={styles.input}
-              value={birthDate}
-              onChangeText={(t) => { setBirthDate(t); clearError(); }}
-              keyboardType="numeric"
-            />
+            <Text style={styles.title}>Sobre você</Text>
+            <TextInput placeholder="Nome" style={styles.input} value={name} onChangeText={setName} />
+            <Text style={styles.label}>Nascimento (AAAA-MM-DD)</Text>
+            <TextInput placeholder="Ex: 2000-12-25" style={styles.input} value={birthDate} onChangeText={setBirthDate} keyboardType="numeric" />
           </View>
         )}
-
         {step === 3 && (
           <View>
-            <Text style={styles.title}>Sua foto de perfil</Text>
-            <Text style={styles.subtitle}>Escolha uma foto da sua galeria.</Text>
-
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              {imageUri ? (
-                <Image
-                  source={{ uri: imageUri }}
-                  style={{ width: 120, height: 120, borderRadius: 60, marginBottom: 10 }}
-                />
-              ) : (
-                <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#e5e7eb', marginBottom: 10 }} />
-              )}
-
-              <TouchableOpacity onPress={pickImage} style={styles.uploadBtn}>
-                <Text style={styles.uploadBtnText}>
-                  {imageUri ? "Trocar Foto" : "Selecionar Foto"}
-                </Text>
-              </TouchableOpacity>
+            <Text style={styles.title}>Foto</Text>
+            <View style={{ alignItems: 'center' }}>
+              {imageUri ? <Image source={{ uri: imageUri }} style={{ width: 120, height: 120, borderRadius: 60 }} /> : <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#eee' }} />}
+              <TouchableOpacity onPress={pickImage} style={styles.uploadBtn}><Text>{imageUri ? "Trocar" : "Escolher"}</Text></TouchableOpacity>
             </View>
           </View>
         )}
-
         {step === 4 && (
           <View>
-            <Text style={styles.title}>Fale um pouco sobre si</Text>
-            <TextInput
-              placeholder="O que você gosta de fazer?"
-              style={[styles.input, { height: 160, textAlignVertical: "top" }]}
-              multiline
-              value={bio}
-              onChangeText={(t) => { setBio(t); clearError(); }}
-            />
+            <Text style={styles.title}>Bio</Text>
+            <TextInput placeholder="Escreva algo..." style={[styles.input, { height: 100 }]} multiline value={bio} onChangeText={setBio} />
           </View>
         )}
-
-        {errorMessage ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
-          </View>
-        ) : null}
-
+        {errorMessage ? <Text style={{ color: 'red', textAlign: 'center' }}>{errorMessage}</Text> : null}
       </ScrollView>
-
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.nextBtn, loading && { backgroundColor: '#a5b4fc' }]}
-          onPress={nextStep}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> :
-            <Text style={styles.nextText}>{step < total ? "Continuar" : "Finalizar Cadastro"}</Text>
-          }
+        <TouchableOpacity style={styles.nextBtn} onPress={nextStep} disabled={loading}>
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextText}>{step < total ? "Continuar" : "Finalizar"}</Text>}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -331,32 +200,20 @@ export default function RegisterFlow({ onNavigate }: RegisterFlowProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#ffffff" },
+  container: { flex: 1, backgroundColor: "#fff" },
   header: { paddingTop: 24, paddingHorizontal: 24 },
   back: { position: "absolute", top: 24, left: 24, zIndex: 10, padding: 8 },
   backText: { fontSize: 28, color: "#6b7280" },
-  progress: { backgroundColor: "#e5e7eb", borderRadius: 999, height: 6, overflow: "hidden" },
+  progress: { backgroundColor: "#e5e7eb", borderRadius: 999, height: 6, width: '100%' },
   progressBar: { height: 6, backgroundColor: "#4f46e5", borderRadius: 999 },
-  content: { padding: 32, paddingBottom: 100 },
-  title: { fontSize: 24, fontWeight: "700", marginBottom: 24, color: "#111827" },
-  input: { backgroundColor: "#f3f4f6", padding: 16, borderRadius: 8, marginBottom: 16, fontSize: 16, color: "#111827" },
-  label: { color: "#6b7280", marginBottom: 8, fontSize: 14 },
-  subtitle: { color: "#6b7280", marginBottom: 24, fontSize: 16 },
-  footer: { padding: 32, position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: "#fff" },
+  content: { padding: 32 },
+  title: { fontSize: 24, fontWeight: "700", marginBottom: 24 },
+  input: { backgroundColor: "#f3f4f6", padding: 16, borderRadius: 8, marginBottom: 16 },
+  label: { color: "#6b7280", marginBottom: 4, fontSize: 12 },
+  uploadBtn: { marginTop: 10, padding: 10, backgroundColor: '#eee', borderRadius: 8 },
+  footer: { padding: 32, backgroundColor: "#fff" },
   nextBtn: { backgroundColor: "#4f46e5", paddingVertical: 16, borderRadius: 12, alignItems: "center" },
   nextText: { color: "#fff", fontWeight: "700", fontSize: 18 },
-  uploadBtn: { backgroundColor: '#e5e7eb', padding: 12, borderRadius: 8 },
-  uploadBtnText: { color: '#374151', fontWeight: '600' },
-  errorContainer: {
-    backgroundColor: '#fee2e2',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 10,
-    marginBottom: 20
-  },
-  errorText: {
-    color: '#ef4444',
-    fontWeight: '600',
-    textAlign: 'center'
-  }
+  errorContainer: { backgroundColor: '#fee2e2', padding: 12, borderRadius: 8, marginTop: 10 },
+  errorText: { color: '#ef4444', textAlign: 'center' }
 });
